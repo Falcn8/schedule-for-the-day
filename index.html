@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Schedule for the Day</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="date-wrap">
+          <button id="dateButton" class="date-button" type="button" aria-label="Choose date">
+            <span id="dateLabel" class="date-label"></span>
+          </button>
+          <input id="dateInput" class="date-native" type="date" aria-label="Date" />
+        </div>
+        <nav class="mode-switch" aria-label="Mode">
+          <button id="viewModeBtn" class="mode-btn active" type="button">View</button>
+          <button id="editModeBtn" class="mode-btn" type="button">Edit</button>
+        </nav>
+      </header>
+
+      <section id="viewScreen" class="screen view-screen">
+        <section class="focus-panel" aria-live="polite">
+          <p id="focusState" class="eyebrow"></p>
+          <h1 id="currentTitle" class="current-title"></h1>
+          <p id="currentTime" class="current-time"></p>
+          <div class="remaining">
+            <span id="remainingLabel"></span>
+            <div class="progress-track" aria-hidden="true">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="day-panel" aria-label="Today schedule">
+          <div class="mini-now">
+            <span id="miniNowTime"></span>
+            <span class="mini-now-line"></span>
+          </div>
+          <ol id="dayList" class="day-list"></ol>
+        </aside>
+      </section>
+
+      <section id="editScreen" class="screen edit-screen" hidden>
+        <div class="edit-actions">
+          <div class="range-setting" aria-label="Day range">
+            <span>Day range</span>
+            <input id="rangeStartInput" type="text" inputmode="numeric" aria-label="Day range start" />
+            <span aria-hidden="true">-</span>
+            <input id="rangeEndInput" type="text" inputmode="numeric" aria-label="Day range end" />
+          </div>
+          <button id="addBlockBtn" class="icon-action" type="button" aria-label="Add schedule block" title="Add schedule block">
+            <span aria-hidden="true">+</span>
+          </button>
+          <button id="addNoteBtn" class="text-action" type="button">Add note</button>
+        </div>
+
+        <section class="timeline-card" aria-label="Edit schedule timeline">
+          <div id="timeline" class="timeline">
+            <div class="time-ruler" aria-hidden="true">
+              <div id="tickLayer" class="tick-layer"></div>
+              <div id="currentMarker" class="current-marker">
+                <span id="currentMarkerLabel"></span>
+              </div>
+            </div>
+            <div id="eventRows" class="event-rows"></div>
+          </div>
+        </section>
+
+        <section id="editorPanel" class="editor-panel" aria-label="Selected schedule item">
+          <input id="titleInput" class="title-input" type="text" aria-label="Schedule title" placeholder="予定名" />
+          <label id="labelEditor" class="label-editor">
+            <span>Label</span>
+            <input id="labelInput" type="text" aria-label="Memo label" placeholder="例: 残り" />
+          </label>
+          <div id="timeEditor" class="time-editor">
+            <label>
+              <span>Start</span>
+              <input id="startInput" type="text" inputmode="numeric" />
+            </label>
+            <label>
+              <span>End</span>
+              <input id="endInput" type="text" inputmode="numeric" />
+            </label>
+          </div>
+          <button id="deleteBtn" class="delete-btn" type="button">Delete</button>
+        </section>
+      </section>
+
+      <div id="contextMenu" class="context-menu" hidden>
+        <button id="contextDeleteBtn" type="button">Delete</button>
+      </div>
+
+      <div id="deleteConfirm" class="delete-confirm" role="dialog" aria-modal="true" aria-labelledby="deleteConfirmText" hidden>
+        <p id="deleteConfirmText">Delete this schedule?</p>
+        <div>
+          <button id="confirmCancelBtn" type="button">No</button>
+          <button id="confirmYesBtn" type="button">Yes</button>
+        </div>
+      </div>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
