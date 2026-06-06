@@ -2,6 +2,7 @@ const STORAGE_KEY = "schedule-for-the-day:fallback:v3";
 const MINUTES_IN_DAY = 1440;
 const SNAP = 5;
 const DEFAULT_DAY_RANGE = { start: 420, end: 1440 };
+const MOCK_NOW = readMockNow();
 
 const els = {
   dateButton: document.querySelector("#dateButton"),
@@ -51,7 +52,7 @@ let saveTimer = null;
 let loadToken = 0;
 
 function defaultState() {
-  const today = toDateInputValue(new Date());
+  const today = toDateInputValue(nowDate());
   return {
     date: today,
     mode: "view",
@@ -73,7 +74,7 @@ function defaultState() {
   };
 }
 
-function emptyDay(date = toDateInputValue(new Date())) {
+function emptyDay(date = toDateInputValue(nowDate())) {
   return {
     date,
     mode: state?.mode ?? "view",
@@ -150,7 +151,7 @@ async function loadDay(date, seedIfEmpty = false) {
 
   if (token !== loadToken) return;
 
-  if (seedIfEmpty && nextState.items.length === 0 && date === toDateInputValue(new Date())) {
+  if (seedIfEmpty && nextState.items.length === 0 && date === toDateInputValue(nowDate())) {
     nextState = normalizeState({ ...defaultState(), mode: state.mode });
   }
 
@@ -621,12 +622,23 @@ function sortedEvents() {
 }
 
 function isSelectedDateToday() {
-  return state.date === toDateInputValue(new Date());
+  return state.date === toDateInputValue(nowDate());
 }
 
 function currentMinutes() {
-  const now = new Date();
+  const now = nowDate();
   return now.getHours() * 60 + now.getMinutes();
+}
+
+function nowDate() {
+  return MOCK_NOW ? new Date(MOCK_NOW) : new Date();
+}
+
+function readMockNow() {
+  const value = new URLSearchParams(window.location.search).get("mockNow");
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 function toDateInputValue(date) {
@@ -711,7 +723,7 @@ els.editModeBtn.addEventListener("click", () => {
 });
 
 els.dateInput.addEventListener("change", () => {
-  const nextDate = els.dateInput.value || toDateInputValue(new Date());
+  const nextDate = els.dateInput.value || toDateInputValue(nowDate());
   loadDay(nextDate);
 });
 
