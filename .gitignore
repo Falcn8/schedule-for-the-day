@@ -1,5 +1,6 @@
 # Database
 schedule.db
+*.db-journal
 
 # Python
 __pycache__/
@@ -27,4 +28,3 @@ Thumbs.db
 # Local environment variables
 .env
 .env.*
-

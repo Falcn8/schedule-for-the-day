@@ -459,7 +459,7 @@ button {
 .current-marker {
   position: absolute;
   top: 0;
-  bottom: -94px;
+  height: 112px;
   width: 1px;
   background: color-mix(in srgb, var(--accent), transparent 25%);
   pointer-events: none;

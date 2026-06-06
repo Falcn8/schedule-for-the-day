@@ -266,6 +266,7 @@ function renderTimeline() {
     }
     els.eventRows.append(noteStrip);
   }
+  syncCurrentMarkerHeight();
 }
 
 function createEventBlock(entry, level = 0) {
@@ -366,6 +367,15 @@ function renderNowMarkers() {
   els.currentMarkerLabel.textContent = formatMinutes(now);
   els.miniNowTime.parentElement.hidden = !today;
   els.miniNowTime.textContent = formatMinutes(now);
+}
+
+function syncCurrentMarkerHeight() {
+  const timeRuler = els.timeline.querySelector(".time-ruler");
+  const lane = els.eventRows.querySelector(".timeline-lane");
+  if (!timeRuler || !lane) return;
+
+  const height = lane.getBoundingClientRect().bottom - timeRuler.getBoundingClientRect().top;
+  els.currentMarker.style.height = `${Math.max(0, height)}px`;
 }
 
 function startDrag(event, id, mode) {
