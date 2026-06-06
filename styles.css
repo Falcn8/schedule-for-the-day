@@ -244,14 +244,14 @@ button {
   right: 0;
   height: 24px;
   color: var(--accent);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
 }
 
 .mini-now span:first-child {
   position: absolute;
   left: 36px;
-  top: -25px;
+  top: -28px;
 }
 
 .mini-now-line {
@@ -261,18 +261,6 @@ button {
   top: 0;
   height: 1px;
   background: var(--accent);
-}
-
-.mini-now-line::after {
-  content: "";
-  position: absolute;
-  left: 70px;
-  top: -1px;
-  width: 0;
-  height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top: 9px solid var(--accent);
 }
 
 .day-list {
@@ -373,8 +361,7 @@ button {
 }
 
 .icon-action:hover,
-.text-action:hover,
-.delete-btn:hover {
+.text-action:hover {
   border-color: #9ea1a7;
   background: #fdfdf9;
   box-shadow: 0 10px 28px rgba(26, 26, 26, 0.06);
