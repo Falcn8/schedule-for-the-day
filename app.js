@@ -58,18 +58,15 @@ function defaultState() {
     mode: "view",
     dayRange: { ...DEFAULT_DAY_RANGE },
     items: [
-      item("お礼メール", 570, 720),
-      note("昼飯"),
-      item("PicoCTF表彰式", 780, 840),
-      item("力学", 850, 880),
-      item("英語一列", 880, 900),
-      item("英語上級", 900, 930),
-      item("ALESS", 930, 990),
-      item("ディープテック", 990, 1020),
-      item("トランペット", 1050, 1140),
-      note("夜飯"),
-      item("お礼メール", 1200, 1260),
-      note("かなたといくところ決める", "残り"),
+      item("Review", 480, 540),
+      item("Deep work", 570, 690),
+      item("Sync", 690, 735),
+      item("Writing", 780, 870),
+      item("Design", 900, 960),
+      item("Workout", 990, 1080),
+      item("Plan", 1200, 1230),
+      note("Buy notebooks", "Errand"),
+      note("Weekend outline", "Memo"),
     ],
   };
 }
@@ -192,7 +189,7 @@ function renderView() {
 
   if (!display) {
     els.focusState.textContent = "No schedule";
-    els.currentTitle.textContent = "予定なし";
+    els.currentTitle.textContent = "No plan";
     els.currentTime.textContent = "";
     els.remainingLabel.textContent = "";
     els.progressBar.style.width = "0%";
@@ -203,19 +200,19 @@ function renderView() {
     els.focusState.textContent = "Now";
     els.currentTitle.textContent = active.title;
     els.currentTime.textContent = `${formatMinutes(active.start)} - ${formatMinutes(active.end)}`;
-    els.remainingLabel.textContent = `残り ${formatDuration(remaining)}`;
+    els.remainingLabel.textContent = `Remaining ${formatDuration(remaining)}`;
     els.progressBar.style.width = `${clamp((elapsed / duration) * 100, 0, 100)}%`;
   } else if (next) {
     els.focusState.textContent = today ? `Next ${formatMinutes(next.start)}` : "First";
     els.currentTitle.textContent = next.title;
     els.currentTime.textContent = `${formatMinutes(next.start)} - ${formatMinutes(next.end)}`;
-    els.remainingLabel.textContent = today ? `開始まで ${formatDuration(next.start - now)}` : "";
+    els.remainingLabel.textContent = today ? `Starts in ${formatDuration(next.start - now)}` : "";
     els.progressBar.style.width = "0%";
   } else {
     els.focusState.textContent = today ? "Done" : "Last";
     els.currentTitle.textContent = lastEvent.title;
     els.currentTime.textContent = `${formatMinutes(lastEvent.start)} - ${formatMinutes(lastEvent.end)}`;
-    els.remainingLabel.textContent = today ? "今日の予定は終了" : "";
+    els.remainingLabel.textContent = today ? "Done for today" : "";
     els.progressBar.style.width = today ? "100%" : "0%";
   }
 
@@ -470,7 +467,7 @@ function addBlock() {
   const range = dayRange();
   const now = isSelectedDateToday() ? snap(currentMinutes()) : range.start;
   const start = clamp(now, range.start, range.end - 60);
-  const next = item("新しい予定", start, start + 60);
+  const next = item("New event", start, start + 60);
   state.items.push(next);
   selectedId = next.id;
   saveState();
@@ -479,7 +476,7 @@ function addBlock() {
 }
 
 function addNote() {
-  const next = note("メモ");
+  const next = note("New note");
   state.items.push(next);
   selectedId = next.id;
   saveState();
@@ -490,7 +487,7 @@ function addNote() {
 function updateSelectedTitle() {
   const selected = state.items.find((entry) => entry.id === selectedId);
   if (!selected) return;
-  selected.title = els.titleInput.value.trim() || "無題";
+  selected.title = els.titleInput.value.trim() || "Untitled";
   saveState();
   renderTimeline();
   renderView();
@@ -650,7 +647,7 @@ function toDateInputValue(date) {
 
 function formatDateLabel(value) {
   const date = new Date(`${value}T00:00:00`);
-  return new Intl.DateTimeFormat("ja-JP", {
+  return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

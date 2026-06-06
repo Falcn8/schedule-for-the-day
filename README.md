@@ -16,7 +16,7 @@ A minimalist daily planning app built with vanilla JavaScript and Python.
 
 ## Screenshots
 
-Screenshots use demo data only.
+Screenshots use demo data only and simulate 10:15 on a sample day.
 
 ### View Mode
 

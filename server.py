@@ -98,7 +98,7 @@ def save_day(payload):
                     item["id"],
                     date,
                     item["kind"],
-                    item.get("title") or "無題",
+                    item.get("title") or "Untitled",
                     item.get("label") or "",
                     item.get("start"),
                     item.get("end"),
