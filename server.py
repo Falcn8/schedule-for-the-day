@@ -46,6 +46,13 @@ def init_db():
 
 def get_day(date):
     with connect() as conn:
+        has_any_data = conn.execute(
+            """
+            select
+              exists(select 1 from day_ranges)
+              or exists(select 1 from schedule_items) as has_any_data
+            """
+        ).fetchone()["has_any_data"]
         day_range = conn.execute(
             "select start, end from day_ranges where date = ?",
             (date,),
@@ -62,6 +69,8 @@ def get_day(date):
 
     return {
         "date": date,
+        "hasData": bool(day_range or rows),
+        "isFirstRun": not bool(has_any_data),
         "dayRange": {
             "start": day_range["start"] if day_range else 420,
             "end": day_range["end"] if day_range else 1440,

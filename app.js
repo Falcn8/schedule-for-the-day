@@ -1,4 +1,5 @@
 const STORAGE_KEY = "schedule-for-the-day:fallback:v3";
+const FIRST_RUN_STORAGE_KEY = "schedule-for-the-day:first-run-demo-seen:v1";
 const MINUTES_IN_DAY = 1440;
 const SNAP = 5;
 const DEFAULT_DAY_RANGE = { start: 420, end: 1440 };
@@ -44,17 +45,16 @@ const els = {
   confirmYesBtn: document.querySelector("#confirmYesBtn"),
 };
 
-let state = normalizeState(defaultState());
+let state = normalizeState(blankState());
 let selectedId = state.items[0]?.id ?? null;
 let dragState = null;
 let pendingDeleteId = null;
 let saveTimer = null;
 let loadToken = 0;
 
-function defaultState() {
-  const today = toDateInputValue(nowDate());
+function demoState(date = toDateInputValue(nowDate())) {
   return {
-    date: today,
+    date,
     mode: "view",
     dayRange: { ...DEFAULT_DAY_RANGE },
     items: [
@@ -71,13 +71,17 @@ function defaultState() {
   };
 }
 
-function emptyDay(date = toDateInputValue(nowDate())) {
+function blankState(date = toDateInputValue(nowDate()), mode = "view") {
   return {
     date,
-    mode: state?.mode ?? "view",
+    mode,
     dayRange: { ...DEFAULT_DAY_RANGE },
     items: [],
   };
+}
+
+function emptyDay(date = toDateInputValue(nowDate())) {
+  return blankState(date, state?.mode ?? "view");
 }
 
 function item(title, start, end) {
@@ -88,14 +92,18 @@ function note(title, label = "") {
   return { id: crypto.randomUUID(), kind: "note", title, label };
 }
 
-function loadFallbackState(date) {
+function readFallbackState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved?.date === date) return saved;
+    return JSON.parse(localStorage.getItem(STORAGE_KEY));
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
   return null;
+}
+
+function loadFallbackState(date) {
+  const saved = readFallbackState();
+  return saved?.date === date ? saved : null;
 }
 
 function normalizeState(nextState) {
@@ -130,11 +138,13 @@ async function persistState() {
 async function loadDay(date, seedIfEmpty = false) {
   const token = ++loadToken;
   let nextState;
+  let isFirstRun = false;
 
   try {
     const response = await fetch(`/api/day?date=${encodeURIComponent(date)}`);
     if (!response.ok) throw new Error(`Load failed: ${response.status}`);
     const data = await response.json();
+    isFirstRun = Boolean(data.isFirstRun);
     nextState = normalizeState({
       date,
       mode: state.mode,
@@ -143,13 +153,19 @@ async function loadDay(date, seedIfEmpty = false) {
     });
   } catch (error) {
     console.warn("Could not load backend database, using local fallback.", error);
-    nextState = normalizeState(loadFallbackState(date) ?? emptyDay(date));
+    const fallbackState = loadFallbackState(date);
+    isFirstRun = !readFallbackState() && !localStorage.getItem(FIRST_RUN_STORAGE_KEY);
+    nextState = normalizeState(fallbackState ?? emptyDay(date));
   }
 
   if (token !== loadToken) return;
 
-  if (seedIfEmpty && nextState.items.length === 0 && date === toDateInputValue(nowDate())) {
-    nextState = normalizeState({ ...defaultState(), mode: state.mode });
+  const seedDemo = shouldSeedDemoData(seedIfEmpty, date, nextState.items, isFirstRun);
+  if (seedDemo) {
+    nextState = normalizeState({ ...demoState(date), mode: state.mode });
+    if (!isScreenshotDemoRequest(date)) {
+      localStorage.setItem(FIRST_RUN_STORAGE_KEY, "1");
+    }
   }
 
   state = nextState;
@@ -157,9 +173,17 @@ async function loadDay(date, seedIfEmpty = false) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   render();
 
-  if (seedIfEmpty && state.items.length > 0) {
+  if (seedDemo) {
     saveState();
   }
+}
+
+function shouldSeedDemoData(seedIfEmpty, date, items, isFirstRun) {
+  return seedIfEmpty && items.length === 0 && (isScreenshotDemoRequest(date) || isFirstRun);
+}
+
+function isScreenshotDemoRequest(date) {
+  return Boolean(MOCK_NOW) && date === toDateInputValue(nowDate());
 }
 
 function render() {
