@@ -21,10 +21,19 @@
           </button>
           <input id="dateInput" class="date-native" type="date" aria-label="Date" />
         </div>
-        <nav class="mode-switch" aria-label="Mode">
-          <button id="viewModeBtn" class="mode-btn active" type="button">View</button>
-          <button id="editModeBtn" class="mode-btn" type="button">Edit</button>
-        </nav>
+        <div class="topbar-actions">
+          <nav class="mode-switch" aria-label="Mode">
+            <button id="viewModeBtn" class="mode-btn active" type="button">View</button>
+            <button id="editModeBtn" class="mode-btn" type="button">Edit</button>
+          </nav>
+          <button id="shortcutHelpBtn" class="help-button" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M9.5 9a2.5 2.5 0 0 1 4.8 1.2c0 1.8-2.3 2-2.3 4"></path>
+              <path d="M12 18h.01"></path>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <section id="viewScreen" class="screen view-screen">
@@ -51,25 +60,69 @@
 
       <section id="editScreen" class="screen edit-screen" hidden>
         <div class="edit-actions">
-          <div class="range-setting" aria-label="Day range">
-            <span>Day range</span>
+          <div class="range-setting" aria-label="Day range" title="Day range">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 7v5l3 2"></path>
+            </svg>
             <input id="rangeStartInput" type="text" inputmode="numeric" aria-label="Day range start" />
             <span aria-hidden="true">-</span>
             <input id="rangeEndInput" type="text" inputmode="numeric" aria-label="Day range end" />
           </div>
           <form id="quickAddForm" class="quick-add" aria-label="Quick add schedule event">
             <input id="quickAddInput" type="text" inputmode="text" aria-label="Quick add event" placeholder="14:00-15:00 勉強" />
-            <button class="text-action" type="submit">Add</button>
+            <button class="tool-button" type="submit" aria-label="Add quick event" title="Add quick event">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+            </button>
           </form>
           <div class="copy-actions" aria-label="Copy schedule">
-            <button id="copyPreviousBtn" class="text-action" type="button">Copy previous</button>
-            <input id="copySourceDateInput" type="date" aria-label="Copy source date" />
-            <button id="copyDateBtn" class="text-action" type="button">Copy date</button>
+            <button id="copyPreviousBtn" class="tool-button" type="button" aria-label="Copy last schedule" title="Copy last schedule">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                <path d="M3 4v6h6"></path>
+                <path d="M12 7v5l4 2"></path>
+              </svg>
+            </button>
+            <div class="copy-date-picker">
+              <button id="copySourceDateButton" class="source-date-button" type="button" aria-label="Choose source date" title="Choose source date">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 2v4"></path>
+                  <path d="M16 2v4"></path>
+                  <path d="M3 10h18"></path>
+                  <path d="M5 4h14a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+                </svg>
+                <span id="copySourceDateLabel">Source</span>
+              </button>
+              <input id="copySourceDateInput" class="copy-date-native" type="date" aria-label="Copy source date" />
+            </div>
+            <button id="copyDateBtn" class="tool-button" type="button" aria-label="Copy selected source date" title="Copy selected source date">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 8h10a2 2 0 0 1 2 2v10H8z"></path>
+                <path d="M4 16V4h12"></path>
+              </svg>
+            </button>
           </div>
-          <button id="addBlockBtn" class="icon-action" type="button" aria-label="Add schedule block" title="Add schedule block">
-            <span aria-hidden="true">+</span>
+          <button id="addBlockBtn" class="tool-button" type="button" aria-label="Add blank event" title="Add blank event">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 2v4"></path>
+              <path d="M16 2v4"></path>
+              <path d="M3 10h18"></path>
+              <path d="M5 4h14a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+              <path d="M12 14v6"></path>
+              <path d="M9.5 17h5"></path>
+            </svg>
           </button>
-          <button id="addNoteBtn" class="text-action" type="button">Add note</button>
+          <button id="addNoteBtn" class="tool-button" type="button" aria-label="Add note" title="Add note">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 3h14v18H5z"></path>
+              <path d="M8 7h8"></path>
+              <path d="M8 11h8"></path>
+              <path d="M8 15h5"></path>
+            </svg>
+          </button>
         </div>
 
         <section class="timeline-card" aria-label="Edit schedule timeline">
@@ -114,6 +167,52 @@
           <button id="confirmCancelBtn" type="button">No</button>
           <button id="confirmYesBtn" type="button">Yes</button>
         </div>
+      </div>
+
+      <div id="shortcutHelp" class="shortcut-help" role="dialog" aria-modal="true" aria-labelledby="shortcutHelpTitle" hidden>
+        <section class="shortcut-panel">
+          <header>
+            <h2 id="shortcutHelpTitle">Shortcuts</h2>
+            <button id="shortcutHelpCloseBtn" class="tool-button" type="button" aria-label="Close shortcuts" title="Close">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12"></path>
+                <path d="M18 6L6 18"></path>
+              </svg>
+            </button>
+          </header>
+          <div class="shortcut-grid">
+            <dl>
+              <dt>Mode</dt>
+              <dd><kbd>E</kbd><span>Edit</span></dd>
+              <dd><kbd>V</kbd><span>View</span></dd>
+              <dd><kbd>?</kbd><span>Shortcuts</span></dd>
+            </dl>
+            <dl>
+              <dt>Create</dt>
+              <dd><kbd>/</kbd><span>Quick add</span></dd>
+              <dd><kbd>N</kbd><span>Event</span></dd>
+              <dd><kbd>Shift</kbd><kbd>N</kbd><span>Note</span></dd>
+            </dl>
+            <dl>
+              <dt>Edit</dt>
+              <dd><kbd>Enter</kbd><span>Rename</span></dd>
+              <dd><kbd>Delete</kbd><span>Delete</span></dd>
+              <dd><kbd>Esc</kbd><span>Cancel</span></dd>
+            </dl>
+            <dl>
+              <dt>Move</dt>
+              <dd><kbd>←</kbd><kbd>→</kbd><span>Move 5 min</span></dd>
+              <dd><kbd>Shift</kbd><kbd>←</kbd><kbd>→</kbd><span>Resize</span></dd>
+              <dd><kbd>[</kbd><kbd>]</kbd><span>Day</span></dd>
+            </dl>
+            <dl>
+              <dt>History</dt>
+              <dd><kbd>Ctrl</kbd><kbd>Z</kbd><span>Undo</span></dd>
+              <dd><kbd>Ctrl</kbd><kbd>Y</kbd><span>Redo</span></dd>
+              <dd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd><span>Redo</span></dd>
+            </dl>
+          </div>
+        </section>
       </div>
     </main>
 

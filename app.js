@@ -2,6 +2,7 @@ const STORAGE_KEY = "schedule-for-the-day:fallback:v3";
 const FIRST_RUN_STORAGE_KEY = "schedule-for-the-day:first-run-demo-seen:v1";
 const MINUTES_IN_DAY = 1440;
 const SNAP = 5;
+const HISTORY_LIMIT = 80;
 const DEFAULT_DAY_RANGE = { start: 420, end: 1440 };
 const MOCK_NOW = readMockNow();
 
@@ -9,6 +10,7 @@ const els = {
   dateButton: document.querySelector("#dateButton"),
   dateInput: document.querySelector("#dateInput"),
   dateLabel: document.querySelector("#dateLabel"),
+  shortcutHelpBtn: document.querySelector("#shortcutHelpBtn"),
   viewModeBtn: document.querySelector("#viewModeBtn"),
   editModeBtn: document.querySelector("#editModeBtn"),
   viewScreen: document.querySelector("#viewScreen"),
@@ -23,6 +25,8 @@ const els = {
   quickAddForm: document.querySelector("#quickAddForm"),
   quickAddInput: document.querySelector("#quickAddInput"),
   copyPreviousBtn: document.querySelector("#copyPreviousBtn"),
+  copySourceDateButton: document.querySelector("#copySourceDateButton"),
+  copySourceDateLabel: document.querySelector("#copySourceDateLabel"),
   copySourceDateInput: document.querySelector("#copySourceDateInput"),
   copyDateBtn: document.querySelector("#copyDateBtn"),
   addBlockBtn: document.querySelector("#addBlockBtn"),
@@ -48,6 +52,8 @@ const els = {
   deleteConfirmText: document.querySelector("#deleteConfirmText"),
   confirmCancelBtn: document.querySelector("#confirmCancelBtn"),
   confirmYesBtn: document.querySelector("#confirmYesBtn"),
+  shortcutHelp: document.querySelector("#shortcutHelp"),
+  shortcutHelpCloseBtn: document.querySelector("#shortcutHelpCloseBtn"),
 };
 
 let state = normalizeState(blankState());
@@ -56,6 +62,9 @@ let dragState = null;
 let pendingDeleteId = null;
 let saveTimer = null;
 let loadToken = 0;
+let undoStack = [];
+let redoStack = [];
+const textEditSnapshots = new WeakMap();
 
 function demoState(date = toDateInputValue(nowDate())) {
   return {
@@ -175,6 +184,7 @@ async function loadDay(date, seedIfEmpty = false) {
 
   state = nextState;
   selectedId = state.items[0]?.id ?? null;
+  clearHistory();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   render();
 
@@ -191,9 +201,99 @@ function isScreenshotDemoRequest(date) {
   return Boolean(MOCK_NOW) && date === toDateInputValue(nowDate());
 }
 
+function createHistorySnapshot() {
+  return JSON.parse(
+    JSON.stringify({
+      state,
+      selectedId,
+    }),
+  );
+}
+
+function historyKey(snapshot = createHistorySnapshot()) {
+  return JSON.stringify({
+    state: snapshot.state,
+    selectedId: snapshot.selectedId,
+  });
+}
+
+function hasHistoryChange(snapshot) {
+  return historyKey(snapshot) !== historyKey();
+}
+
+function pushUndoSnapshot(snapshot, clearRedo = true) {
+  if (!snapshot) return;
+  const previousKey = undoStack.length ? historyKey(undoStack.at(-1)) : null;
+  if (previousKey !== historyKey(snapshot)) {
+    undoStack.push(snapshot);
+    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  }
+  if (clearRedo) redoStack = [];
+}
+
+function commitHistorySnapshot(snapshot) {
+  if (!snapshot || !hasHistoryChange(snapshot)) return;
+  pushUndoSnapshot(snapshot);
+}
+
+function recordUndoSnapshot() {
+  pushUndoSnapshot(createHistorySnapshot());
+}
+
+function clearHistory() {
+  undoStack = [];
+  redoStack = [];
+}
+
+function restoreHistorySnapshot(snapshot) {
+  state = normalizeState(snapshot.state);
+  selectedId = state.items.some((entry) => entry.id === snapshot.selectedId)
+    ? snapshot.selectedId
+    : state.items[0]?.id ?? null;
+  hideFloatingUi();
+  saveState();
+  render();
+  if (selectedId) focusSelectedItem(selectedId);
+}
+
+function undoScheduleChange() {
+  const snapshot = undoStack.pop();
+  if (!snapshot) return;
+  redoStack.push(createHistorySnapshot());
+  restoreHistorySnapshot(snapshot);
+}
+
+function redoScheduleChange() {
+  const snapshot = redoStack.pop();
+  if (!snapshot) return;
+  pushUndoSnapshot(createHistorySnapshot(), false);
+  restoreHistorySnapshot(snapshot);
+}
+
+function setMode(mode) {
+  if (state.mode === mode) return;
+  state.mode = mode;
+  saveState();
+  render();
+}
+
+function beginTextEditSnapshot(input) {
+  if (!textEditSnapshots.has(input)) {
+    textEditSnapshots.set(input, createHistorySnapshot());
+  }
+}
+
+function commitTextEditSnapshot(input) {
+  const snapshot = textEditSnapshots.get(input);
+  if (!snapshot) return;
+  commitHistorySnapshot(snapshot);
+  textEditSnapshots.delete(input);
+}
+
 function render() {
   els.dateInput.value = state.date;
   els.dateLabel.textContent = formatDateLabel(state.date);
+  updateCopySourceDateLabel();
   els.rangeStartInput.value = formatMinutes(dayRange().start, true);
   els.rangeEndInput.value = formatMinutes(dayRange().end, true);
   els.viewModeBtn.classList.toggle("active", state.mode === "view");
@@ -422,6 +522,7 @@ function startDrag(event, id, mode) {
   dragState = {
     id,
     mode,
+    snapshot: createHistorySnapshot(),
     pointerStart: event.clientX,
     start: entry.start,
     end: entry.end,
@@ -495,6 +596,7 @@ function stopDrag() {
   document.removeEventListener("pointermove", onDrag);
   if (finishedDrag) {
     document.querySelector(`.schedule-block[data-id="${CSS.escape(finishedDrag.id)}"]`)?.classList.remove("dragging");
+    commitHistorySnapshot(finishedDrag.snapshot);
   }
   saveState();
   renderNowMarkers();
@@ -503,6 +605,7 @@ function stopDrag() {
 }
 
 function addBlock() {
+  recordUndoSnapshot();
   const range = dayRange();
   const now = isSelectedDateToday() ? snap(currentMinutes()) : range.start;
   const start = clamp(now, range.start, range.end - 60);
@@ -515,6 +618,7 @@ function addBlock() {
 }
 
 function addNote() {
+  recordUndoSnapshot();
   const next = note("New note");
   state.items.push(next);
   selectedId = next.id;
@@ -531,6 +635,7 @@ function addQuickEvent() {
     return;
   }
 
+  recordUndoSnapshot();
   const next = item(parsed.title, parsed.start, parsed.end);
   state.items.push(next);
   selectedId = next.id;
@@ -548,7 +653,7 @@ async function copyPreviousPopulatedDay() {
 async function copySpecificDay() {
   const sourceDate = els.copySourceDateInput.value;
   if (!sourceDate || sourceDate === state.date) {
-    markCopyError(els.copySourceDateInput);
+    markCopyError(els.copySourceDateButton);
     return;
   }
   await copyFromDayUrl(`/api/day?date=${encodeURIComponent(sourceDate)}`, els.copyDateBtn);
@@ -571,12 +676,14 @@ async function copyFromDayUrl(url, control) {
 }
 
 function copyDayIntoSelectedDate(sourceDay) {
+  const snapshot = createHistorySnapshot();
   state = normalizeState({
     date: state.date,
     mode: state.mode,
     dayRange: sourceDay.dayRange ?? DEFAULT_DAY_RANGE,
     items: cloneScheduleItems(sourceDay.items ?? []),
   });
+  commitHistorySnapshot(snapshot);
   selectedId = state.items[0]?.id ?? null;
   saveState();
   render();
@@ -592,6 +699,7 @@ function cloneScheduleItems(items) {
 
 function clearCopyErrors() {
   els.copyPreviousBtn.removeAttribute("aria-invalid");
+  els.copySourceDateButton.removeAttribute("aria-invalid");
   els.copySourceDateInput.removeAttribute("aria-invalid");
   els.copyDateBtn.removeAttribute("aria-invalid");
 }
@@ -599,6 +707,12 @@ function clearCopyErrors() {
 function markCopyError(control) {
   control.setAttribute("aria-invalid", "true");
   control.focus();
+}
+
+function updateCopySourceDateLabel() {
+  els.copySourceDateLabel.textContent = els.copySourceDateInput.value
+    ? formatShortDateLabel(els.copySourceDateInput.value)
+    : "Source";
 }
 
 function updateSelectedTitle() {
@@ -622,6 +736,7 @@ function updateSelectedLabel() {
 function updateSelectedTimes() {
   const selected = state.items.find((entry) => entry.id === selectedId);
   if (!selected || selected.kind !== "event") return;
+  const snapshot = createHistorySnapshot();
   let start = parseTimeText(els.startInput.value, selected.start);
   let end = parseTimeText(els.endInput.value, selected.end);
   start = snap(start);
@@ -629,17 +744,65 @@ function updateSelectedTimes() {
   if (end <= start) end = clamp(start + SNAP, SNAP, MINUTES_IN_DAY);
   selected.start = clamp(start, 0, MINUTES_IN_DAY - SNAP);
   selected.end = clamp(end, selected.start + SNAP, MINUTES_IN_DAY);
+  commitHistorySnapshot(snapshot);
   saveState();
   render();
 }
 
 function updateDayRange() {
+  const snapshot = createHistorySnapshot();
   const fallback = dayRange();
   const start = parseTimeText(els.rangeStartInput.value, fallback.start);
   const end = parseTimeText(els.rangeEndInput.value, fallback.end);
   state.dayRange = sanitizeRange({ start, end });
+  commitHistorySnapshot(snapshot);
   saveState();
   render();
+}
+
+function moveSelectedEvent(deltaMinutes) {
+  const selected = state.items.find((entry) => entry.id === selectedId);
+  if (!selected || selected.kind !== "event") return false;
+  const range = dayRange();
+  const duration = selected.end - selected.start;
+  const nextStart = clamp(selected.start + deltaMinutes, range.start, range.end - duration);
+  if (nextStart === selected.start) return false;
+  recordUndoSnapshot();
+  selected.start = nextStart;
+  selected.end = nextStart + duration;
+  saveState();
+  render();
+  focusSelectedItem(selected.id);
+  return true;
+}
+
+function resizeSelectedEvent(deltaMinutes) {
+  const selected = state.items.find((entry) => entry.id === selectedId);
+  if (!selected || selected.kind !== "event") return false;
+  const range = dayRange();
+  const nextEnd = clamp(selected.end + deltaMinutes, selected.start + SNAP, range.end);
+  if (nextEnd === selected.end) return false;
+  recordUndoSnapshot();
+  selected.end = nextEnd;
+  saveState();
+  render();
+  focusSelectedItem(selected.id);
+  return true;
+}
+
+function focusQuickAdd() {
+  if (state.mode !== "edit") {
+    setMode("edit");
+  }
+  requestAnimationFrame(() => {
+    els.quickAddInput.focus();
+  });
+}
+
+function loadRelativeDay(offset) {
+  const date = new Date(`${state.date}T00:00:00`);
+  date.setDate(date.getDate() + offset);
+  loadDay(toDateInputValue(date));
 }
 
 function selectItem(id) {
@@ -692,7 +855,18 @@ function hideFloatingUi() {
   pendingDeleteId = null;
 }
 
+function showShortcutHelp() {
+  els.shortcutHelp.hidden = false;
+  els.shortcutHelpCloseBtn.focus();
+}
+
+function hideShortcutHelp() {
+  els.shortcutHelp.hidden = true;
+  els.shortcutHelpBtn.focus({ preventScroll: true });
+}
+
 function confirmDelete() {
+  recordUndoSnapshot();
   const id = pendingDeleteId ?? selectedId;
   state.items = state.items.filter((entry) => entry.id !== id);
   selectedId = sortedItems()[0]?.id ?? null;
@@ -772,6 +946,14 @@ function formatDateLabel(value) {
   }).format(date);
 }
 
+function formatShortDateLabel(value) {
+  const date = new Date(`${value}T00:00:00`);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 function formatMinutes(minutes, padded = false) {
   const normalized = clamp(Math.round(minutes), 0, MINUTES_IN_DAY);
   const hours = Math.floor(normalized / 60);
@@ -832,6 +1014,17 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function isUndoShortcut(event) {
+  return (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+}
+
+function isRedoShortcut(event) {
+  return (event.ctrlKey || event.metaKey) && (
+    event.key.toLowerCase() === "y" ||
+    (event.shiftKey && event.key.toLowerCase() === "z")
+  );
+}
+
 els.dateButton.addEventListener("click", () => {
   if (typeof els.dateInput.showPicker === "function") {
     els.dateInput.showPicker();
@@ -841,23 +1034,23 @@ els.dateButton.addEventListener("click", () => {
   }
 });
 
-els.viewModeBtn.addEventListener("click", () => {
-  state.mode = "view";
-  saveState();
-  render();
-});
+els.viewModeBtn.addEventListener("click", () => setMode("view"));
 
-els.editModeBtn.addEventListener("click", () => {
-  state.mode = "edit";
-  saveState();
-  render();
-});
+els.editModeBtn.addEventListener("click", () => setMode("edit"));
 
 els.dateInput.addEventListener("change", () => {
   const nextDate = els.dateInput.value || toDateInputValue(nowDate());
   loadDay(nextDate);
 });
 
+els.copySourceDateButton.addEventListener("click", () => {
+  if (typeof els.copySourceDateInput.showPicker === "function") {
+    els.copySourceDateInput.showPicker();
+  } else {
+    els.copySourceDateInput.focus();
+    els.copySourceDateInput.click();
+  }
+});
 els.addBlockBtn.addEventListener("click", addBlock);
 els.addNoteBtn.addEventListener("click", addNote);
 bindQuickAddInput();
@@ -865,7 +1058,14 @@ bindTextInput(els.titleInput, updateSelectedTitle);
 bindTextInput(els.labelInput, updateSelectedLabel);
 els.copyPreviousBtn.addEventListener("click", copyPreviousPopulatedDay);
 els.copyDateBtn.addEventListener("click", copySpecificDay);
-els.copySourceDateInput.addEventListener("input", clearCopyErrors);
+els.copySourceDateInput.addEventListener("input", () => {
+  clearCopyErrors();
+  updateCopySourceDateLabel();
+});
+els.copySourceDateInput.addEventListener("change", () => {
+  clearCopyErrors();
+  updateCopySourceDateLabel();
+});
 els.startInput.addEventListener("change", updateSelectedTimes);
 els.endInput.addEventListener("change", updateSelectedTimes);
 els.startInput.addEventListener("blur", updateSelectedTimes);
@@ -882,10 +1082,16 @@ els.deleteBtn.addEventListener("click", () => showDeleteConfirm(selectedId));
 els.contextDeleteBtn.addEventListener("click", () => showDeleteConfirm(selectedId));
 els.confirmCancelBtn.addEventListener("click", () => hideFloatingUi());
 els.confirmYesBtn.addEventListener("click", confirmDelete);
+els.shortcutHelpBtn.addEventListener("click", showShortcutHelp);
+els.shortcutHelpCloseBtn.addEventListener("click", hideShortcutHelp);
 
 document.addEventListener("click", (event) => {
   if (!els.contextMenu.hidden && !els.contextMenu.contains(event.target)) {
     els.contextMenu.hidden = true;
+  }
+
+  if (!els.shortcutHelp.hidden && event.target === els.shortcutHelp) {
+    hideShortcutHelp();
   }
 });
 
@@ -893,6 +1099,18 @@ document.addEventListener("keydown", (event) => {
   const activeEl = document.activeElement;
   const activeTag = activeEl?.tagName;
   const isTyping = activeTag === "INPUT" || activeTag === "TEXTAREA";
+
+  if (!els.shortcutHelp.hidden && event.key === "Escape") {
+    event.preventDefault();
+    hideShortcutHelp();
+    return;
+  }
+
+  if (isTyping && event.key === "Escape") {
+    event.preventDefault();
+    activeEl.blur();
+    return;
+  }
 
   if (!els.deleteConfirm.hidden && event.key === "Enter") {
     event.preventDefault();
@@ -906,7 +1124,74 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (!isTyping && isUndoShortcut(event)) {
+    event.preventDefault();
+    undoScheduleChange();
+    return;
+  }
+
+  if (!isTyping && isRedoShortcut(event)) {
+    event.preventDefault();
+    redoScheduleChange();
+    return;
+  }
+
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+  if (!isTyping && (event.key === "?" || (event.key === "/" && event.shiftKey))) {
+    event.preventDefault();
+    showShortcutHelp();
+    return;
+  }
+
+  if (event.key.toLowerCase() === "e") {
+    event.preventDefault();
+    setMode("edit");
+    return;
+  }
+
+  if (event.key.toLowerCase() === "v") {
+    event.preventDefault();
+    setMode("view");
+    return;
+  }
+
+  if (event.key === "/") {
+    event.preventDefault();
+    focusQuickAdd();
+    return;
+  }
+
+  if (event.key === "[") {
+    event.preventDefault();
+    loadRelativeDay(-1);
+    return;
+  }
+
+  if (event.key === "]") {
+    event.preventDefault();
+    loadRelativeDay(1);
+    return;
+  }
+
   if (state.mode !== "edit") return;
+
+  if (event.key.toLowerCase() === "n") {
+    event.preventDefault();
+    if (event.shiftKey) {
+      addNote();
+    } else {
+      addBlock();
+    }
+    return;
+  }
+
+  if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && selectedId) {
+    const direction = event.key === "ArrowLeft" ? -SNAP : SNAP;
+    const changed = event.shiftKey ? resizeSelectedEvent(direction) : moveSelectedEvent(direction);
+    if (changed) event.preventDefault();
+    return;
+  }
 
   if ((event.key === "Backspace" || event.key === "Delete") && !isTyping && selectedId) {
     event.preventDefault();
@@ -948,11 +1233,18 @@ function bindTextInput(input, update) {
 
   input.addEventListener("compositionend", () => {
     composing = false;
+    beginTextEditSnapshot(input);
     update();
   });
 
   input.addEventListener("input", () => {
-    if (!composing) update();
+    if (composing) return;
+    beginTextEditSnapshot(input);
+    update();
+  });
+
+  input.addEventListener("blur", () => {
+    commitTextEditSnapshot(input);
   });
 
   input.addEventListener("keydown", (event) => {

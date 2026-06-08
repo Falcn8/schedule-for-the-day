@@ -120,14 +120,21 @@ button {
 }
 
 .date-button:focus-visible,
+.help-button:focus-visible,
 .mode-btn:focus-visible,
-.icon-action:focus-visible,
+.tool-button:focus-visible,
 .text-action:focus-visible,
 .quick-add input:focus-visible,
-.copy-actions input:focus-visible,
+.source-date-button:focus-visible,
 .delete-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ink), transparent 60%);
   outline-offset: 3px;
+}
+
+.topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .mode-switch {
@@ -137,6 +144,26 @@ button {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
+}
+
+.help-button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+
+.help-button:hover {
+  border-color: #9ea1a7;
+  background: #fdfdf9;
+  color: var(--ink);
+  box-shadow: 0 10px 28px rgba(26, 26, 26, 0.06);
 }
 
 .mode-btn {
@@ -313,19 +340,19 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
 .range-setting {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   min-height: 38px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--panel);
-  padding: 0 12px;
+  padding: 0 10px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
@@ -353,15 +380,26 @@ button {
   border-bottom-color: var(--line);
 }
 
+.icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .quick-add {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 38px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--panel);
-  padding: 0 4px 0 14px;
+  padding: 0 4px 0 12px;
   transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out);
 }
 
@@ -372,7 +410,7 @@ button {
 }
 
 .quick-add input {
-  width: clamp(170px, 22vw, 260px);
+  width: clamp(180px, 24vw, 290px);
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -389,18 +427,13 @@ button {
   color: #8c2820;
 }
 
-.quick-add .text-action {
-  min-height: 30px;
-  padding: 0 11px;
-}
-
 .copy-actions {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   min-height: 38px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--panel);
   padding: 0 4px;
   transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out);
@@ -412,36 +445,55 @@ button {
   background: #fdfdf9;
 }
 
-.copy-actions input {
-  width: 128px;
+.copy-date-picker {
+  position: relative;
+}
+
+.source-date-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 88px;
   min-height: 30px;
   border: 0;
   border-left: 1px solid var(--line);
   border-right: 1px solid var(--line);
   background: transparent;
   color: var(--ink);
-  outline: none;
   padding: 0 8px;
   font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
 }
 
-.copy-actions .text-action {
-  min-height: 30px;
-  padding: 0 10px;
-  white-space: nowrap;
+.source-date-button span {
+  display: inline-block;
+  min-width: 43px;
+  text-align: left;
 }
 
+.copy-date-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tool-button:disabled,
 .text-action:disabled {
   cursor: progress;
   opacity: 0.64;
 }
 
-.copy-actions [aria-invalid="true"] {
+.copy-actions [aria-invalid="true"],
+.quick-add input[aria-invalid="true"] {
   color: #8c2820;
 }
 
-.icon-action,
+.tool-button,
 .text-action,
 .delete-btn {
   border: 1px solid var(--line);
@@ -450,21 +502,26 @@ button {
   transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out), transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
 }
 
-.icon-action:hover,
+.tool-button:hover,
 .text-action:hover {
   border-color: #9ea1a7;
   background: #fdfdf9;
   box-shadow: 0 10px 28px rgba(26, 26, 26, 0.06);
 }
 
-.icon-action {
+.tool-button {
   display: grid;
   place-items: center;
+  width: 34px;
+  height: 30px;
+  border-radius: 6px;
+  padding: 0;
+}
+
+.edit-actions > .tool-button {
   width: 38px;
   height: 38px;
-  border-radius: 999px;
-  font-size: 26px;
-  line-height: 1;
+  border-radius: 8px;
 }
 
 .text-action,
@@ -922,6 +979,90 @@ button {
   color: var(--paper);
 }
 
+.shortcut-help {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgba(247, 247, 244, 0.72);
+  padding: 20px;
+}
+
+.shortcut-panel {
+  width: min(680px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 22px 70px rgba(20, 20, 20, 0.16);
+  padding: 18px;
+}
+
+.shortcut-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.shortcut-panel h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+
+.shortcut-grid dl {
+  margin: 0;
+}
+
+.shortcut-grid dt {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.shortcut-grid dd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 7px;
+  min-height: 26px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shortcut-grid dd span {
+  margin-left: 5px;
+  color: color-mix(in srgb, var(--ink), transparent 20%);
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-bottom-color: #aeb0b5;
+  border-radius: 5px;
+  background: #f1f1ee;
+  color: var(--ink);
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     width: min(100vw - 20px, 760px);
@@ -933,6 +1074,10 @@ button {
     gap: 14px;
   }
 
+  .topbar-actions {
+    gap: 7px;
+  }
+
   .date-label {
     font-size: 16px;
   }
@@ -940,6 +1085,11 @@ button {
   .mode-btn {
     min-width: 64px;
     padding: 8px 12px;
+  }
+
+  .help-button {
+    width: 34px;
+    height: 34px;
   }
 
   .view-screen {
@@ -1007,7 +1157,7 @@ button {
     justify-content: center;
   }
 
-  .copy-actions input {
+  .source-date-button {
     flex: 1 1 128px;
     min-width: 0;
   }
@@ -1029,6 +1179,22 @@ button {
     width: calc(100vw - 24px);
     justify-content: space-between;
     border-radius: 12px;
+  }
+
+  .shortcut-help {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .shortcut-panel {
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+    padding: 16px;
+  }
+
+  .shortcut-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 }
 
