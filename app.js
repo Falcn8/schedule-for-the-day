@@ -22,6 +22,9 @@ const els = {
   dayList: document.querySelector("#dayList"),
   quickAddForm: document.querySelector("#quickAddForm"),
   quickAddInput: document.querySelector("#quickAddInput"),
+  copyPreviousBtn: document.querySelector("#copyPreviousBtn"),
+  copySourceDateInput: document.querySelector("#copySourceDateInput"),
+  copyDateBtn: document.querySelector("#copyDateBtn"),
   addBlockBtn: document.querySelector("#addBlockBtn"),
   addNoteBtn: document.querySelector("#addNoteBtn"),
   rangeStartInput: document.querySelector("#rangeStartInput"),
@@ -538,6 +541,66 @@ function addQuickEvent() {
   focusSelectedItem(next.id);
 }
 
+async function copyPreviousPopulatedDay() {
+  await copyFromDayUrl(`/api/day?date=${encodeURIComponent(state.date)}&source=previous-populated`, els.copyPreviousBtn);
+}
+
+async function copySpecificDay() {
+  const sourceDate = els.copySourceDateInput.value;
+  if (!sourceDate || sourceDate === state.date) {
+    markCopyError(els.copySourceDateInput);
+    return;
+  }
+  await copyFromDayUrl(`/api/day?date=${encodeURIComponent(sourceDate)}`, els.copyDateBtn);
+}
+
+async function copyFromDayUrl(url, control) {
+  clearCopyErrors();
+  control.disabled = true;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Copy source failed: ${response.status}`);
+    const sourceDay = await response.json();
+    copyDayIntoSelectedDate(sourceDay);
+  } catch (error) {
+    console.warn("Could not copy schedule.", error);
+    markCopyError(control);
+  } finally {
+    control.disabled = false;
+  }
+}
+
+function copyDayIntoSelectedDate(sourceDay) {
+  state = normalizeState({
+    date: state.date,
+    mode: state.mode,
+    dayRange: sourceDay.dayRange ?? DEFAULT_DAY_RANGE,
+    items: cloneScheduleItems(sourceDay.items ?? []),
+  });
+  selectedId = state.items[0]?.id ?? null;
+  saveState();
+  render();
+  if (selectedId) focusSelectedItem(selectedId);
+}
+
+function cloneScheduleItems(items) {
+  return items.map((entry) => ({
+    ...entry,
+    id: crypto.randomUUID(),
+  }));
+}
+
+function clearCopyErrors() {
+  els.copyPreviousBtn.removeAttribute("aria-invalid");
+  els.copySourceDateInput.removeAttribute("aria-invalid");
+  els.copyDateBtn.removeAttribute("aria-invalid");
+}
+
+function markCopyError(control) {
+  control.setAttribute("aria-invalid", "true");
+  control.focus();
+}
+
 function updateSelectedTitle() {
   const selected = state.items.find((entry) => entry.id === selectedId);
   if (!selected) return;
@@ -800,6 +863,9 @@ els.addNoteBtn.addEventListener("click", addNote);
 bindQuickAddInput();
 bindTextInput(els.titleInput, updateSelectedTitle);
 bindTextInput(els.labelInput, updateSelectedLabel);
+els.copyPreviousBtn.addEventListener("click", copyPreviousPopulatedDay);
+els.copyDateBtn.addEventListener("click", copySpecificDay);
+els.copySourceDateInput.addEventListener("input", clearCopyErrors);
 els.startInput.addEventListener("change", updateSelectedTimes);
 els.endInput.addEventListener("change", updateSelectedTimes);
 els.startInput.addEventListener("blur", updateSelectedTimes);

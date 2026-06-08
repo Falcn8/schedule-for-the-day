@@ -124,6 +124,7 @@ button {
 .icon-action:focus-visible,
 .text-action:focus-visible,
 .quick-add input:focus-visible,
+.copy-actions input:focus-visible,
 .delete-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ink), transparent 60%);
   outline-offset: 3px;
@@ -391,6 +392,53 @@ button {
 .quick-add .text-action {
   min-height: 30px;
   padding: 0 11px;
+}
+
+.copy-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 0 4px;
+  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out);
+}
+
+.copy-actions:focus-within,
+.copy-actions:hover {
+  border-color: #9ea1a7;
+  background: #fdfdf9;
+}
+
+.copy-actions input {
+  width: 128px;
+  min-height: 30px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  outline: none;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.copy-actions .text-action {
+  min-height: 30px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.text-action:disabled {
+  cursor: progress;
+  opacity: 0.64;
+}
+
+.copy-actions [aria-invalid="true"] {
+  color: #8c2820;
 }
 
 .icon-action,
@@ -951,6 +999,17 @@ button {
 
   .quick-add input {
     width: 100%;
+  }
+
+  .copy-actions {
+    order: 4;
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .copy-actions input {
+    flex: 1 1 128px;
+    min-width: 0;
   }
 
   .editor-panel {

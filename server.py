@@ -79,6 +79,22 @@ def get_day(date):
     }
 
 
+def get_previous_populated_day(before_date):
+    with connect() as conn:
+        row = conn.execute(
+            """
+            select date
+            from schedule_items
+            where date < ?
+            group by date
+            order by date desc
+            limit 1
+            """,
+            (before_date,),
+        ).fetchone()
+    return get_day(row["date"]) if row else None
+
+
 def save_day(payload):
     date = payload["date"]
     day_range = payload.get("dayRange") or {}
@@ -131,6 +147,13 @@ class Handler(SimpleHTTPRequestHandler):
             date = query.get("date", [""])[0]
             if not date:
                 self.send_json({"error": "date is required"}, status=400)
+                return
+            if query.get("source", [""])[0] == "previous-populated":
+                previous = get_previous_populated_day(date)
+                if not previous:
+                    self.send_json({"error": "no previous populated day"}, status=404)
+                    return
+                self.send_json(previous)
                 return
             self.send_json(get_day(date))
             return
