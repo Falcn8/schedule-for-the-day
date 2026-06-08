@@ -20,6 +20,8 @@ const els = {
   progressBar: document.querySelector("#progressBar"),
   miniNowTime: document.querySelector("#miniNowTime"),
   dayList: document.querySelector("#dayList"),
+  quickAddForm: document.querySelector("#quickAddForm"),
+  quickAddInput: document.querySelector("#quickAddInput"),
   addBlockBtn: document.querySelector("#addBlockBtn"),
   addNoteBtn: document.querySelector("#addNoteBtn"),
   rangeStartInput: document.querySelector("#rangeStartInput"),
@@ -518,6 +520,24 @@ function addNote() {
   startTitleEdit(next.id);
 }
 
+function addQuickEvent() {
+  const parsed = parseQuickAddEvent(els.quickAddInput.value);
+  if (!parsed) {
+    els.quickAddInput.setAttribute("aria-invalid", "true");
+    els.quickAddInput.select();
+    return;
+  }
+
+  const next = item(parsed.title, parsed.start, parsed.end);
+  state.items.push(next);
+  selectedId = next.id;
+  els.quickAddInput.value = "";
+  els.quickAddInput.removeAttribute("aria-invalid");
+  saveState();
+  render();
+  focusSelectedItem(next.id);
+}
+
 function updateSelectedTitle() {
   const selected = state.items.find((entry) => entry.id === selectedId);
   if (!selected) return;
@@ -715,6 +735,23 @@ function parseTimeText(value, fallback) {
   return hours * 60 + minutes;
 }
 
+function parseQuickAddEvent(value) {
+  const match = String(value)
+    .trim()
+    .match(/^(\d{1,2}(?::?\d{2})?)\s*[-–—]\s*(\d{1,2}(?::?\d{2})?)\s+(.+)$/);
+  if (!match) return null;
+
+  const start = snap(parseTimeText(match[1], Number.NaN));
+  const end = snap(parseTimeText(match[2], Number.NaN));
+  const title = match[3].trim();
+  if (!title || Number.isNaN(start) || Number.isNaN(end) || end <= start) return null;
+  return {
+    start: clamp(start, 0, MINUTES_IN_DAY - SNAP),
+    end: clamp(end, start + SNAP, MINUTES_IN_DAY),
+    title,
+  };
+}
+
 function snap(value) {
   return Math.round(value / SNAP) * SNAP;
 }
@@ -760,6 +797,7 @@ els.dateInput.addEventListener("change", () => {
 
 els.addBlockBtn.addEventListener("click", addBlock);
 els.addNoteBtn.addEventListener("click", addNote);
+bindQuickAddInput();
 bindTextInput(els.titleInput, updateSelectedTitle);
 bindTextInput(els.labelInput, updateSelectedLabel);
 els.startInput.addEventListener("change", updateSelectedTimes);
@@ -856,6 +894,34 @@ function bindTextInput(input, update) {
     if (composing || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     input.blur();
+  });
+}
+
+function bindQuickAddInput() {
+  let composing = false;
+
+  els.quickAddInput.addEventListener("compositionstart", () => {
+    composing = true;
+  });
+
+  els.quickAddInput.addEventListener("compositionend", () => {
+    composing = false;
+  });
+
+  els.quickAddInput.addEventListener("input", () => {
+    els.quickAddInput.removeAttribute("aria-invalid");
+  });
+
+  els.quickAddInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    if (composing || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    addQuickEvent();
+  });
+
+  els.quickAddForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    addQuickEvent();
   });
 }
 

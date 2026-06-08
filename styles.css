@@ -123,6 +123,7 @@ button {
 .mode-btn:focus-visible,
 .icon-action:focus-visible,
 .text-action:focus-visible,
+.quick-add input:focus-visible,
 .delete-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ink), transparent 60%);
   outline-offset: 3px;
@@ -349,6 +350,47 @@ button {
 
 .range-setting input:focus {
   border-bottom-color: var(--line);
+}
+
+.quick-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 0 4px 0 14px;
+  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out);
+}
+
+.quick-add:focus-within,
+.quick-add:hover {
+  border-color: #9ea1a7;
+  background: #fdfdf9;
+}
+
+.quick-add input {
+  width: clamp(170px, 22vw, 260px);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  outline: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.quick-add input::placeholder {
+  color: color-mix(in srgb, var(--muted), transparent 22%);
+}
+
+.quick-add input[aria-invalid="true"] {
+  color: #8c2820;
+}
+
+.quick-add .text-action {
+  min-height: 30px;
+  padding: 0 11px;
 }
 
 .icon-action,
@@ -900,6 +942,15 @@ button {
     order: 3;
     width: 100%;
     justify-content: center;
+  }
+
+  .quick-add {
+    order: 2;
+    flex: 1 1 100%;
+  }
+
+  .quick-add input {
+    width: 100%;
   }
 
   .editor-panel {
