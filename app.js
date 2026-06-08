@@ -736,14 +736,8 @@ els.dateInput.addEventListener("change", () => {
 
 els.addBlockBtn.addEventListener("click", addBlock);
 els.addNoteBtn.addEventListener("click", addNote);
-els.titleInput.addEventListener("input", updateSelectedTitle);
-els.titleInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") els.titleInput.blur();
-});
-els.labelInput.addEventListener("input", updateSelectedLabel);
-els.labelInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") els.labelInput.blur();
-});
+bindTextInput(els.titleInput, updateSelectedTitle);
+bindTextInput(els.labelInput, updateSelectedLabel);
 els.startInput.addEventListener("change", updateSelectedTimes);
 els.endInput.addEventListener("change", updateSelectedTimes);
 els.startInput.addEventListener("blur", updateSelectedTimes);
@@ -815,6 +809,30 @@ function commitSelectedTimesOnEnter(event) {
   event.preventDefault();
   updateSelectedTimes();
   event.currentTarget.blur();
+}
+
+function bindTextInput(input, update) {
+  let composing = false;
+
+  input.addEventListener("compositionstart", () => {
+    composing = true;
+  });
+
+  input.addEventListener("compositionend", () => {
+    composing = false;
+    update();
+  });
+
+  input.addEventListener("input", () => {
+    if (!composing) update();
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    if (composing || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    input.blur();
+  });
 }
 
 render();
