@@ -643,6 +643,7 @@ button {
   position: relative;
   height: 74px;
   border-bottom: 1px solid var(--faint);
+  touch-action: none;
 }
 
 .schedule-block {
@@ -663,7 +664,8 @@ button {
   transition: border-color 150ms var(--ease-out), color 150ms var(--ease-out), opacity 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
 }
 
-.schedule-block.selected {
+.schedule-block.selected,
+.schedule-block.selecting {
   border-color: var(--ink);
   background: #fbfbf8;
   color: var(--ink);
@@ -682,9 +684,19 @@ button {
 }
 
 .schedule-block.selected:hover,
+.schedule-block.selecting:hover,
 .schedule-block.selected:focus-visible,
 .schedule-block.dragging {
   background: #fbfbf8;
+}
+
+.selection-box {
+  position: absolute;
+  z-index: 12;
+  border: 1px solid color-mix(in srgb, var(--ink), transparent 24%);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink), transparent 90%);
+  pointer-events: none;
 }
 
 .schedule-block.dragging {

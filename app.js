@@ -58,12 +58,15 @@ const els = {
 
 let state = normalizeState(blankState());
 let selectedId = state.items[0]?.id ?? null;
+let selectedIds = new Set(selectedId ? [selectedId] : []);
 let dragState = null;
+let selectionDragState = null;
 let pendingDeleteId = null;
 let saveTimer = null;
 let loadToken = 0;
 let undoStack = [];
 let redoStack = [];
+let scheduleClipboard = null;
 const textEditSnapshots = new WeakMap();
 
 function demoState(date = toDateInputValue(nowDate())) {
@@ -183,7 +186,7 @@ async function loadDay(date, seedIfEmpty = false) {
   }
 
   state = nextState;
-  selectedId = state.items[0]?.id ?? null;
+  selectOnly(state.items[0]?.id ?? null);
   clearHistory();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   render();
@@ -206,6 +209,7 @@ function createHistorySnapshot() {
     JSON.stringify({
       state,
       selectedId,
+      selectedIds: [...selectedIds],
     }),
   );
 }
@@ -214,6 +218,7 @@ function historyKey(snapshot = createHistorySnapshot()) {
   return JSON.stringify({
     state: snapshot.state,
     selectedId: snapshot.selectedId,
+    selectedIds: snapshot.selectedIds ?? [],
   });
 }
 
@@ -250,6 +255,8 @@ function restoreHistorySnapshot(snapshot) {
   selectedId = state.items.some((entry) => entry.id === snapshot.selectedId)
     ? snapshot.selectedId
     : state.items[0]?.id ?? null;
+  selectedIds = new Set((snapshot.selectedIds ?? [selectedId]).filter((id) => state.items.some((entry) => entry.id === id)));
+  if (selectedId && !selectedIds.has(selectedId)) selectedIds.add(selectedId);
   hideFloatingUi();
   saveState();
   render();
@@ -288,6 +295,33 @@ function commitTextEditSnapshot(input) {
   if (!snapshot) return;
   commitHistorySnapshot(snapshot);
   textEditSnapshots.delete(input);
+}
+
+function selectedItems() {
+  const ids = selectedIds.size ? selectedIds : new Set(selectedId ? [selectedId] : []);
+  return state.items.filter((entry) => ids.has(entry.id));
+}
+
+function selectOnly(id) {
+  selectedId = id;
+  selectedIds = new Set(id ? [id] : []);
+}
+
+function selectMany(ids) {
+  selectedIds = new Set(ids.filter((id) => state.items.some((entry) => entry.id === id)));
+  selectedId = [...selectedIds][0] ?? null;
+}
+
+function isItemSelected(id) {
+  return selectedIds.has(id) || selectedId === id;
+}
+
+function syncSelectionAfterItemsChange() {
+  selectedIds = new Set([...selectedIds].filter((id) => state.items.some((entry) => entry.id === id)));
+  if (!selectedId || !state.items.some((entry) => entry.id === selectedId)) {
+    selectedId = [...selectedIds][0] ?? sortedItems()[0]?.id ?? null;
+  }
+  if (selectedId && selectedIds.size === 0) selectedIds.add(selectedId);
 }
 
 function render() {
@@ -370,6 +404,7 @@ function renderTimeline() {
   for (const layout of layouts.items) {
     lane.append(createEventBlock(layout.entry, layout.level));
   }
+  lane.addEventListener("pointerdown", startSelectionDrag);
   els.eventRows.append(lane);
 
   const notes = state.items.filter((entry) => entry.kind === "note");
@@ -380,7 +415,7 @@ function renderTimeline() {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.id = entry.id;
-      button.className = entry.id === selectedId ? "selected" : "";
+      button.className = isItemSelected(entry.id) ? "selected" : "";
       button.textContent = `${entry.label ? `${entry.label} ` : ""}${entry.title}`;
       button.addEventListener("click", () => selectItem(entry.id));
       button.addEventListener("dblclick", () => startTitleEdit(entry.id));
@@ -411,7 +446,7 @@ function createEventBlock(entry, level = 0) {
   block.style.width = `${Math.max(0.4, minutesToPercent(clippedEnd) - minutesToPercent(clippedStart))}%`;
   block.style.top = `${12 + level * 28}px`;
   if (entry.end - entry.start < 90) block.classList.add("compact");
-  if (entry.id === selectedId) block.classList.add("selected");
+  if (isItemSelected(entry.id)) block.classList.add("selected");
   block.innerHTML = `
     <span class="time-badge start">${formatMinutes(entry.start)}</span>
     <span class="block-title">${escapeHtml(entry.title)}</span>
@@ -472,8 +507,7 @@ function renderTicks() {
 }
 
 function renderEditor() {
-  const selected = state.items.find((entry) => entry.id === selectedId) ?? sortedItems()[0];
-  selectedId = selected?.id ?? null;
+  const selected = selectedId ? state.items.find((entry) => entry.id === selectedId) : null;
   els.editorPanel.hidden = !selected;
   if (!selected) return;
 
@@ -511,7 +545,7 @@ function startDrag(event, id, mode) {
   if (event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
-  selectedId = id;
+  selectOnly(id);
   const entry = state.items.find((candidate) => candidate.id === id);
   if (!entry || entry.kind !== "event") return;
 
@@ -590,6 +624,67 @@ function updateDraggedEditorTimes(entry) {
   els.endInput.value = formatMinutes(entry.end, true);
 }
 
+function startSelectionDrag(event) {
+  if (event.button !== 0 || event.target !== event.currentTarget) return;
+  event.preventDefault();
+  const lane = event.currentTarget;
+  const box = document.createElement("div");
+  box.className = "selection-box";
+  lane.append(box);
+  selectionDragState = {
+    lane,
+    box,
+    laneRect: lane.getBoundingClientRect(),
+    startX: event.clientX,
+    startY: event.clientY,
+    currentIds: [],
+  };
+  updateSelectionDrag(event);
+  document.addEventListener("pointermove", updateSelectionDrag);
+  document.addEventListener("pointerup", stopSelectionDrag, { once: true });
+}
+
+function updateSelectionDrag(event) {
+  if (!selectionDragState) return;
+  const { box, laneRect, startX, startY } = selectionDragState;
+  const left = Math.min(startX, event.clientX);
+  const top = Math.min(startY, event.clientY);
+  const width = Math.abs(event.clientX - startX);
+  const height = Math.abs(event.clientY - startY);
+  box.style.left = `${left - laneRect.left}px`;
+  box.style.top = `${top - laneRect.top}px`;
+  box.style.width = `${width}px`;
+  box.style.height = `${height}px`;
+
+  const selectionRect = { left, top, right: left + width, bottom: top + height };
+  const ids = [];
+  document.querySelectorAll(".schedule-block").forEach((block) => {
+    const rect = block.getBoundingClientRect();
+    const selected = rectsIntersect(selectionRect, rect);
+    block.classList.toggle("selecting", selected);
+    if (selected) ids.push(block.dataset.id);
+  });
+  selectionDragState.currentIds = ids;
+}
+
+function stopSelectionDrag() {
+  if (!selectionDragState) return;
+  document.removeEventListener("pointermove", updateSelectionDrag);
+  const ids = selectionDragState.currentIds;
+  document.querySelectorAll(".schedule-block.selecting").forEach((block) => {
+    block.classList.remove("selecting");
+  });
+  selectionDragState.box.remove();
+  selectionDragState = null;
+  selectMany(ids);
+  render();
+  if (selectedId) focusSelectedItem(selectedId);
+}
+
+function rectsIntersect(a, b) {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
 function stopDrag() {
   const finishedDrag = dragState;
   dragState = null;
@@ -611,7 +706,7 @@ function addBlock() {
   const start = clamp(now, range.start, range.end - 60);
   const next = item("New event", start, start + 60);
   state.items.push(next);
-  selectedId = next.id;
+  selectOnly(next.id);
   saveState();
   render();
   startTitleEdit(next.id);
@@ -621,7 +716,7 @@ function addNote() {
   recordUndoSnapshot();
   const next = note("New note");
   state.items.push(next);
-  selectedId = next.id;
+  selectOnly(next.id);
   saveState();
   render();
   startTitleEdit(next.id);
@@ -638,7 +733,7 @@ function addQuickEvent() {
   recordUndoSnapshot();
   const next = item(parsed.title, parsed.start, parsed.end);
   state.items.push(next);
-  selectedId = next.id;
+  selectOnly(next.id);
   els.quickAddInput.value = "";
   els.quickAddInput.removeAttribute("aria-invalid");
   saveState();
@@ -684,7 +779,7 @@ function copyDayIntoSelectedDate(sourceDay) {
     items: cloneScheduleItems(sourceDay.items ?? []),
   });
   commitHistorySnapshot(snapshot);
-  selectedId = state.items[0]?.id ?? null;
+  selectOnly(state.items[0]?.id ?? null);
   saveState();
   render();
   if (selectedId) focusSelectedItem(selectedId);
@@ -695,6 +790,60 @@ function cloneScheduleItems(items) {
     ...entry,
     id: crypto.randomUUID(),
   }));
+}
+
+function cloneScheduleItem(entry) {
+  return {
+    ...entry,
+    id: crypto.randomUUID(),
+  };
+}
+
+function copySelectedScheduleItem() {
+  const items = selectedItems();
+  if (!items.length) return false;
+  scheduleClipboard = JSON.parse(JSON.stringify(items));
+  return true;
+}
+
+function pasteScheduleItem() {
+  if (!scheduleClipboard?.length) return false;
+  const nextItems = scheduleClipboard.map((entry) => {
+    const next = cloneScheduleItem(entry);
+    if (next.kind === "event") {
+      const pastedTimes = pastedEventTimes(next);
+      next.start = pastedTimes.start;
+      next.end = pastedTimes.end;
+    }
+    return next;
+  });
+
+  recordUndoSnapshot();
+  state.items.push(...nextItems);
+  selectMany(nextItems.map((entry) => entry.id));
+  saveState();
+  render();
+  focusSelectedItem(selectedId);
+  return true;
+}
+
+function cutSelectedScheduleItems() {
+  if (!copySelectedScheduleItem()) return false;
+  deleteSelectedItems();
+  return true;
+}
+
+function pastedEventTimes(entry) {
+  const range = dayRange();
+  const duration = entry.end - entry.start;
+  if (entry.end + SNAP <= range.end) {
+    return { start: entry.start + SNAP, end: entry.end + SNAP };
+  }
+  if (entry.start - SNAP >= range.start) {
+    return { start: entry.start - SNAP, end: entry.end - SNAP };
+  }
+  const start = clamp(entry.start, range.start, Math.max(range.start, range.end - duration));
+  return { start, end: start + duration };
 }
 
 function clearCopyErrors() {
@@ -806,7 +955,7 @@ function loadRelativeDay(offset) {
 }
 
 function selectItem(id) {
-  selectedId = id;
+  selectOnly(id);
   hideFloatingUi();
   render();
   focusSelectedItem(id);
@@ -832,7 +981,7 @@ function focusSelectedItem(id = selectedId) {
 
 function openContextMenu(event, id) {
   event.preventDefault();
-  selectedId = id;
+  if (!isItemSelected(id)) selectOnly(id);
   render();
   els.contextMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 130)}px`;
   els.contextMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 54)}px`;
@@ -840,11 +989,13 @@ function openContextMenu(event, id) {
 }
 
 function showDeleteConfirm(id = selectedId) {
-  const selected = state.items.find((entry) => entry.id === id);
-  if (!selected) return;
+  if (id && !isItemSelected(id)) selectOnly(id);
+  const items = selectedItems();
+  if (!items.length) return;
   pendingDeleteId = id;
   els.contextMenu.hidden = true;
-  els.deleteConfirmText.textContent = `Delete "${selected.title}"?`;
+  els.deleteConfirmText.textContent =
+    items.length === 1 ? `Delete "${items[0].title}"?` : `Delete ${items.length} selected blocks?`;
   els.deleteConfirm.hidden = false;
   els.confirmYesBtn.focus();
 }
@@ -866,13 +1017,21 @@ function hideShortcutHelp() {
 }
 
 function confirmDelete() {
+  deleteSelectedItems(pendingDeleteId ?? selectedId);
+  pendingDeleteId = null;
+}
+
+function deleteSelectedItems(fallbackId = selectedId) {
+  const ids = selectedIds.size ? selectedIds : new Set(fallbackId ? [fallbackId] : []);
+  const deleteIds = new Set([...ids].filter((id) => state.items.some((entry) => entry.id === id)));
+  if (!deleteIds.size) return false;
   recordUndoSnapshot();
-  const id = pendingDeleteId ?? selectedId;
-  state.items = state.items.filter((entry) => entry.id !== id);
-  selectedId = sortedItems()[0]?.id ?? null;
+  state.items = state.items.filter((entry) => !deleteIds.has(entry.id));
+  selectOnly(sortedItems()[0]?.id ?? null);
   pendingDeleteId = null;
   saveState();
   render();
+  return true;
 }
 
 function dayRange() {
@@ -1025,6 +1184,18 @@ function isRedoShortcut(event) {
   );
 }
 
+function isCopyShortcut(event) {
+  return (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "c";
+}
+
+function isPasteShortcut(event) {
+  return (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "v";
+}
+
+function isCutShortcut(event) {
+  return (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "x";
+}
+
 els.dateButton.addEventListener("click", () => {
   if (typeof els.dateInput.showPicker === "function") {
     els.dateInput.showPicker();
@@ -1112,6 +1283,8 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (isTyping) return;
+
   if (!els.deleteConfirm.hidden && event.key === "Enter") {
     event.preventDefault();
     confirmDelete();
@@ -1124,21 +1297,36 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (!isTyping && isUndoShortcut(event)) {
+  if (isUndoShortcut(event)) {
     event.preventDefault();
     undoScheduleChange();
     return;
   }
 
-  if (!isTyping && isRedoShortcut(event)) {
+  if (isRedoShortcut(event)) {
     event.preventDefault();
     redoScheduleChange();
     return;
   }
 
+  if (state.mode === "edit" && isCopyShortcut(event)) {
+    if (copySelectedScheduleItem()) event.preventDefault();
+    return;
+  }
+
+  if (state.mode === "edit" && isPasteShortcut(event)) {
+    if (pasteScheduleItem()) event.preventDefault();
+    return;
+  }
+
+  if (state.mode === "edit" && isCutShortcut(event)) {
+    if (cutSelectedScheduleItems()) event.preventDefault();
+    return;
+  }
+
   if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-  if (!isTyping && (event.key === "?" || (event.key === "/" && event.shiftKey))) {
+  if (event.key === "?" || (event.key === "/" && event.shiftKey)) {
     event.preventDefault();
     showShortcutHelp();
     return;
@@ -1193,7 +1381,7 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  if ((event.key === "Backspace" || event.key === "Delete") && !isTyping && selectedId) {
+  if ((event.key === "Backspace" || event.key === "Delete") && selectedId) {
     event.preventDefault();
     showDeleteConfirm(selectedId);
     return;
