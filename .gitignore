@@ -28,3 +28,7 @@ Thumbs.db
 # Local environment variables
 .env
 .env.*
+
+# Google Calendar local auth
+google_credentials.json
+.google-token.json

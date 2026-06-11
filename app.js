@@ -29,6 +29,18 @@ const els = {
   copySourceDateLabel: document.querySelector("#copySourceDateLabel"),
   copySourceDateInput: document.querySelector("#copySourceDateInput"),
   copyDateBtn: document.querySelector("#copyDateBtn"),
+  importGoogleBtn: document.querySelector("#importGoogleBtn"),
+  googleImportDialog: document.querySelector("#googleImportDialog"),
+  googleImportCloseBtn: document.querySelector("#googleImportCloseBtn"),
+  googleImportStatus: document.querySelector("#googleImportStatus"),
+  googleImportList: document.querySelector("#googleImportList"),
+  icsSourceForm: document.querySelector("#icsSourceForm"),
+  icsSourceInput: document.querySelector("#icsSourceInput"),
+  icsSourceList: document.querySelector("#icsSourceList"),
+  icsSourceAddBtn: document.querySelector("#icsSourceAddBtn"),
+  googleConnectBtn: document.querySelector("#googleConnectBtn"),
+  googleMergeBtn: document.querySelector("#googleMergeBtn"),
+  googleReplaceBtn: document.querySelector("#googleReplaceBtn"),
   addBlockBtn: document.querySelector("#addBlockBtn"),
   addNoteBtn: document.querySelector("#addNoteBtn"),
   rangeStartInput: document.querySelector("#rangeStartInput"),
@@ -67,6 +79,8 @@ let loadToken = 0;
 let undoStack = [];
 let redoStack = [];
 let scheduleClipboard = null;
+let pendingGoogleImport = null;
+let googleImportPollTimer = null;
 const textEditSnapshots = new WeakMap();
 
 function demoState(date = toDateInputValue(nowDate())) {
@@ -864,6 +878,340 @@ function updateCopySourceDateLabel() {
     : "Source";
 }
 
+async function openGoogleImportDialog() {
+  pendingGoogleImport = null;
+  clearGoogleImportPoll();
+  updateGoogleImportDialog({
+    status: `Loading calendars for ${formatDateLabel(state.date)}...`,
+    items: [],
+    skippedAllDay: 0,
+    sources: [],
+    sourceErrors: [],
+    googleNeedsAuth: false,
+    busy: true,
+  });
+  els.googleImportDialog.hidden = false;
+  els.googleImportCloseBtn.focus();
+  await loadGoogleImport();
+}
+
+function closeGoogleImportDialog() {
+  clearGoogleImportPoll();
+  pendingGoogleImport = null;
+  els.googleImportDialog.hidden = true;
+  els.importGoogleBtn.focus({ preventScroll: true });
+}
+
+async function loadGoogleImport({ quiet = false } = {}) {
+  const url = calendarImportUrl();
+  if (!quiet) {
+    updateGoogleImportDialog({
+      status: `Loading calendars for ${formatDateLabel(state.date)}...`,
+      items: [],
+      skippedAllDay: 0,
+      sources: [],
+      sourceErrors: [],
+      googleNeedsAuth: false,
+      busy: true,
+    });
+  }
+
+  try {
+    const response = await fetch(url);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (payload.needsAuth) {
+        if (!quiet) {
+          updateGoogleImportDialog({
+            status: "Connect Google Calendar or add an ICS link to import events.",
+            items: [],
+            skippedAllDay: 0,
+            sources: [],
+            sourceErrors: [],
+            googleNeedsAuth: true,
+          });
+        }
+        return false;
+      }
+      throw new Error(payload.error || `Calendar import failed: ${response.status}`);
+    }
+
+    pendingGoogleImport = payload;
+    updateGoogleImportDialog({
+      status: googleImportStatus(payload),
+      items: payload.items ?? [],
+      skippedAllDay: payload.skippedAllDay ?? 0,
+      sources: payload.sources ?? [],
+      sourceErrors: payload.sourceErrors ?? [],
+      googleNeedsAuth: Boolean(payload.googleNeedsAuth),
+    });
+    clearGoogleImportPoll();
+    return true;
+  } catch (error) {
+    console.warn("Could not import calendars.", error);
+    if (!quiet) {
+      updateGoogleImportDialog({
+        status: error.message || "Could not import calendars.",
+        items: [],
+        skippedAllDay: 0,
+        sources: [],
+        sourceErrors: [],
+        googleNeedsAuth: false,
+      });
+    }
+    return false;
+  }
+}
+
+function calendarImportUrl() {
+  const params = new URLSearchParams({
+    date: state.date,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+  });
+  return `/api/import/events?${params}`;
+}
+
+function googleImportStatus(payload) {
+  const items = payload.items ?? [];
+  const skipped = payload.skippedAllDay ?? 0;
+  const sourceErrors = payload.sourceErrors ?? [];
+  const errorText = sourceErrors.length
+    ? ` ${sourceErrors.length} source${sourceErrors.length === 1 ? "" : "s"} could not be loaded.`
+    : "";
+  if (!items.length && skipped) {
+    return `${skipped} all-day event${skipped === 1 ? "" : "s"} skipped. No timed events found.${errorText}`;
+  }
+  if (!items.length) {
+    if (payload.googleNeedsAuth && !(payload.sources ?? []).length) {
+      return `Connect Google Calendar or add an ICS link to import events.${errorText}`;
+    }
+    return `No timed events found for this day.${errorText}`;
+  }
+  const base = `${items.length} timed event${items.length === 1 ? "" : "s"} ready to import.`;
+  const skippedText = skipped ? ` ${skipped} all-day event${skipped === 1 ? "" : "s"} skipped.` : "";
+  return `${base}${skippedText}${errorText}`;
+}
+
+function updateGoogleImportDialog({
+  status,
+  items,
+  skippedAllDay,
+  sources = [],
+  sourceErrors = [],
+  googleNeedsAuth,
+  busy = false,
+}) {
+  els.googleImportStatus.textContent = status;
+  renderIcsSources(sources, sourceErrors);
+  els.googleImportList.innerHTML = (items ?? [])
+    .map(
+      (entry) => `
+        <li>
+          <time>${formatMinutes(entry.start, true)}-${formatMinutes(entry.end, true)}</time>
+          <span>${escapeHtml(entry.title)}</span>
+        </li>
+      `,
+    )
+    .join("");
+
+  const hasItems = Boolean(items?.length);
+  els.googleConnectBtn.hidden = !googleNeedsAuth;
+  els.googleConnectBtn.disabled = busy;
+  els.googleMergeBtn.disabled = busy || !hasItems;
+  els.googleReplaceBtn.disabled = busy || !hasItems;
+  if (!hasItems && !skippedAllDay) {
+    els.googleImportList.innerHTML = "";
+  }
+}
+
+function renderIcsSources(sources, sourceErrors = []) {
+  const errorBySource = new Map(sourceErrors.map((entry) => [entry.source, entry.error]));
+  els.icsSourceList.innerHTML = sources.length
+    ? sources
+      .map((source) => {
+        const label = source.name || source.url;
+        const error = errorBySource.get(label) || errorBySource.get(source.url);
+        return `
+          <li>
+            <span title="${escapeHtml(source.url)}">${escapeHtml(label)}</span>
+            ${error ? `<small>${escapeHtml(error)}</small>` : ""}
+            <button class="source-remove-button" type="button" data-source-id="${escapeHtml(source.id)}" aria-label="Remove ${escapeHtml(label)}" title="Remove ICS link">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12"></path>
+                <path d="M18 6L6 18"></path>
+              </svg>
+            </button>
+          </li>
+        `;
+      })
+      .join("")
+    : "";
+}
+
+async function connectGoogleCalendar() {
+  els.googleConnectBtn.disabled = true;
+  try {
+    const response = await fetch("/api/google/auth-url");
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Google auth failed: ${response.status}`);
+    window.open(payload.url, "googleCalendarAuth", "width=520,height=720");
+    updateGoogleImportDialog({
+      status: "Finish Google sign-in, then this import will retry automatically.",
+      items: pendingGoogleImport?.items ?? [],
+      skippedAllDay: pendingGoogleImport?.skippedAllDay ?? 0,
+      sources: pendingGoogleImport?.sources ?? [],
+      sourceErrors: pendingGoogleImport?.sourceErrors ?? [],
+      googleNeedsAuth: true,
+    });
+    pollGoogleImport();
+  } catch (error) {
+    console.warn("Could not start Google Calendar connection.", error);
+    updateGoogleImportDialog({
+      status: error.message || "Could not start Google Calendar connection.",
+      items: pendingGoogleImport?.items ?? [],
+      skippedAllDay: pendingGoogleImport?.skippedAllDay ?? 0,
+      sources: pendingGoogleImport?.sources ?? [],
+      sourceErrors: pendingGoogleImport?.sourceErrors ?? [],
+      googleNeedsAuth: true,
+    });
+  } finally {
+    els.googleConnectBtn.disabled = false;
+  }
+}
+
+function pollGoogleImport() {
+  clearGoogleImportPoll();
+  let attempts = 0;
+  googleImportPollTimer = setInterval(async () => {
+    attempts += 1;
+    const imported = await loadGoogleImport({ quiet: true });
+    if (imported || attempts >= 30) {
+      clearGoogleImportPoll();
+      if (!imported && attempts >= 30) {
+        updateGoogleImportDialog({
+          status: "Google sign-in is still pending. Connect again when the browser finishes.",
+          items: pendingGoogleImport?.items ?? [],
+          skippedAllDay: pendingGoogleImport?.skippedAllDay ?? 0,
+          sources: pendingGoogleImport?.sources ?? [],
+          sourceErrors: pendingGoogleImport?.sourceErrors ?? [],
+          googleNeedsAuth: true,
+        });
+      }
+    }
+  }, 2000);
+}
+
+function clearGoogleImportPoll() {
+  if (googleImportPollTimer) {
+    clearInterval(googleImportPollTimer);
+    googleImportPollTimer = null;
+  }
+}
+
+function applyGoogleImport(mode) {
+  const sourceItems = pendingGoogleImport?.items ?? [];
+  if (!sourceItems.length) return;
+
+  const importedItems = cloneGoogleImportItems(sourceItems);
+  const snapshot = createHistorySnapshot();
+  let selectedImportedItems = importedItems;
+
+  if (mode === "replace") {
+    state.items = importedItems;
+  } else {
+    const existingKeys = new Set(state.items.filter((entry) => entry.kind === "event").map(eventKey));
+    const newItems = importedItems.filter((entry) => !existingKeys.has(eventKey(entry)));
+    if (!newItems.length) {
+      updateGoogleImportDialog({
+        status: "Those Google Calendar events are already in this day.",
+        items: sourceItems,
+        skippedAllDay: pendingGoogleImport.skippedAllDay ?? 0,
+        sources: pendingGoogleImport.sources ?? [],
+        sourceErrors: pendingGoogleImport.sourceErrors ?? [],
+        googleNeedsAuth: Boolean(pendingGoogleImport.googleNeedsAuth),
+      });
+      return;
+    }
+    state.items.push(...newItems);
+    selectedImportedItems = newItems;
+  }
+
+  state.dayRange = rangeIncludingEvents(state.dayRange, selectedImportedItems);
+  commitHistorySnapshot(snapshot);
+  selectMany(selectedImportedItems.map((entry) => entry.id));
+  saveState();
+  render();
+  closeGoogleImportDialog();
+  if (selectedId) focusSelectedItem(selectedId);
+}
+
+function cloneGoogleImportItems(items) {
+  return items.map((entry) => ({
+    id: crypto.randomUUID(),
+    kind: "event",
+    title: entry.title || "Untitled",
+    start: snap(clamp(entry.start, 0, MINUTES_IN_DAY - SNAP)),
+    end: snap(clamp(entry.end, SNAP, MINUTES_IN_DAY)),
+  })).filter((entry) => entry.end > entry.start);
+}
+
+function eventKey(entry) {
+  return `${entry.title.trim().toLowerCase()}|${entry.start}|${entry.end}`;
+}
+
+function rangeIncludingEvents(range, items) {
+  const events = items.filter((entry) => entry.kind === "event");
+  if (!events.length) return sanitizeRange(range);
+  const start = Math.min(range.start, ...events.map((entry) => entry.start));
+  const end = Math.max(range.end, ...events.map((entry) => entry.end));
+  return sanitizeRange({ start, end });
+}
+
+async function addIcsSource() {
+  const url = els.icsSourceInput.value.trim();
+  if (!url) {
+    els.icsSourceInput.setAttribute("aria-invalid", "true");
+    els.icsSourceInput.focus();
+    return;
+  }
+
+  els.icsSourceAddBtn.disabled = true;
+  els.icsSourceInput.removeAttribute("aria-invalid");
+  try {
+    const response = await fetch("/api/ics-sources", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Could not save ICS link: ${response.status}`);
+    els.icsSourceInput.value = "";
+    await loadGoogleImport();
+  } catch (error) {
+    console.warn("Could not save ICS link.", error);
+    els.icsSourceInput.setAttribute("aria-invalid", "true");
+    els.googleImportStatus.textContent = error.message || "Could not save ICS link.";
+    els.icsSourceInput.focus();
+  } finally {
+    els.icsSourceAddBtn.disabled = false;
+  }
+}
+
+async function removeIcsSource(sourceId) {
+  if (!sourceId) return;
+  try {
+    const response = await fetch(`/api/ics-sources?id=${encodeURIComponent(sourceId)}`, {
+      method: "DELETE",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Could not remove ICS link: ${response.status}`);
+    await loadGoogleImport();
+  } catch (error) {
+    console.warn("Could not remove ICS link.", error);
+    els.googleImportStatus.textContent = error.message || "Could not remove ICS link.";
+  }
+}
+
 function updateSelectedTitle() {
   const selected = state.items.find((entry) => entry.id === selectedId);
   if (!selected) return;
@@ -1227,6 +1575,23 @@ els.addNoteBtn.addEventListener("click", addNote);
 bindQuickAddInput();
 bindTextInput(els.titleInput, updateSelectedTitle);
 bindTextInput(els.labelInput, updateSelectedLabel);
+els.importGoogleBtn.addEventListener("click", openGoogleImportDialog);
+els.googleImportCloseBtn.addEventListener("click", closeGoogleImportDialog);
+els.googleConnectBtn.addEventListener("click", connectGoogleCalendar);
+els.googleMergeBtn.addEventListener("click", () => applyGoogleImport("merge"));
+els.googleReplaceBtn.addEventListener("click", () => applyGoogleImport("replace"));
+els.icsSourceForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  addIcsSource();
+});
+els.icsSourceInput.addEventListener("input", () => {
+  els.icsSourceInput.removeAttribute("aria-invalid");
+});
+els.icsSourceList.addEventListener("click", (event) => {
+  const button = event.target.closest(".source-remove-button");
+  if (!button) return;
+  removeIcsSource(button.dataset.sourceId);
+});
 els.copyPreviousBtn.addEventListener("click", copyPreviousPopulatedDay);
 els.copyDateBtn.addEventListener("click", copySpecificDay);
 els.copySourceDateInput.addEventListener("input", () => {
@@ -1261,6 +1626,10 @@ document.addEventListener("click", (event) => {
     els.contextMenu.hidden = true;
   }
 
+  if (!els.googleImportDialog.hidden && event.target === els.googleImportDialog) {
+    closeGoogleImportDialog();
+  }
+
   if (!els.shortcutHelp.hidden && event.target === els.shortcutHelp) {
     hideShortcutHelp();
   }
@@ -1274,6 +1643,12 @@ document.addEventListener("keydown", (event) => {
   if (!els.shortcutHelp.hidden && event.key === "Escape") {
     event.preventDefault();
     hideShortcutHelp();
+    return;
+  }
+
+  if (!els.googleImportDialog.hidden && event.key === "Escape") {
+    event.preventDefault();
+    closeGoogleImportDialog();
     return;
   }
 
