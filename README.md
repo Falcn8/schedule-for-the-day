@@ -156,10 +156,13 @@ Notes sit alongside the timeline:
 ├── google_credentials.json # Google OAuth credentials (local, ignored)
 ├── .google-token.json     # Google OAuth token (local, ignored)
 ├── docs/
-│   └── screenshots/
-│       ├── view-mode.jpg
-│       ├── edit-mode.jpg
-│       └── import-calendar.jpg
+│   ├── screenshots/
+│   │   ├── view-mode.jpg
+│   │   ├── edit-mode.jpg
+│   │   └── import-calendar.jpg
+│   └── video/
+│       ├── schedule-for-the-day-pr-cover.jpg
+│       └── schedule-for-the-day-pr.mp4
 ├── README.md
 ├── LICENSE
 └── .gitignore
@@ -172,6 +175,22 @@ Notes sit alongside the timeline:
 - CSS3
 - Python
 - SQLite
+
+## Product Video
+
+[![Watch the 24-second Schedule for the Day product video](docs/video/schedule-for-the-day-pr-cover.jpg)](docs/video/schedule-for-the-day-pr.mp4)
+
+**[Watch the 24-second product video](docs/video/schedule-for-the-day-pr.mp4)**
+
+The video is built with Remotion in `remotion/` and uses the screenshots in `docs/screenshots/`.
+
+```bash
+npm install
+npm run video:studio
+npm run video:render
+```
+
+The final render is written to `out/schedule-for-the-day-pr.mp4`. The version linked above is stored in `docs/video/`. On systems where Chrome is installed somewhere other than the macOS default, set `REMOTION_BROWSER_EXECUTABLE` before running the render command.
 
 ## License
 

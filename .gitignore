@@ -25,6 +25,12 @@ Thumbs.db
 # Logs
 *.log
 
+# Node / Remotion
+node_modules/
+
+# Remotion output
+out/
+
 # Local environment variables
 .env
 .env.*
