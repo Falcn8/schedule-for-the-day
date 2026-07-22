@@ -1,0 +1,14 @@
+{
+  "name": "schedule-for-the-day-video",
+  "private": true,
+  "scripts": {
+    "video:studio": "remotion studio remotion/index.jsx --public-dir=docs/screenshots",
+    "video:render": "remotion render remotion/index.jsx ScheduleForTheDayPR out/schedule-for-the-day-pr.mp4 --public-dir=docs/screenshots --codec=h264 --crf=17 --image-format=png --pixel-format=yuv420p --color-space=bt709 --muted --browser-executable=\"${REMOTION_BROWSER_EXECUTABLE:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}\" --chrome-mode=chrome-for-testing --gl=swiftshader --timeout=120000 --concurrency=1 --disallow-parallel-encoding"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.496",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "remotion": "4.0.496"
+  }
+}
